@@ -1,7 +1,7 @@
 from datetime import datetime
 import os, sys
 import socket
-import psutil
+import psutil, platform
 
 class Miscellaneous:
 
@@ -68,6 +68,7 @@ class Miscellaneous:
         else:
             return os.environ.get("USER")
 
+    @staticmethod
     def get_running_processes():
         """
         * Список имён работающих процессов
@@ -81,3 +82,20 @@ class Miscellaneous:
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass # игнорируем ошибки, если процесс исчез, или нет прав доступа
         return process_names
+
+    @staticmethod
+    def get_system_properties():
+        """
+        * Получение характеристик операционной системы
+        *
+        * @return Кортеж с характеристиками операционной системы
+        """
+        os_name: str = platform.system()
+        os_version: str = platform.version()
+        os_release: str = platform.release()
+        memory = psutil.virtual_memory()
+        total_memory: str = f'{memory.total / (1024**3):.2f} ГБ'
+        used_memory: str = f'{memory.used / (1024**3):.2f} ГБ'
+        available_memory: str = f'{memory.available / (1024**3):.2f} ГБ'
+        percent_memory: str = f'{memory.percent}%'
+        return os_name, os_version, os_release, total_memory, used_memory, available_memory, percent_memory

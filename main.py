@@ -134,7 +134,21 @@ def run_bot(api_token:str, http_proxy:str, https_proxy:str) -> None:
             (message.text.lower() == "/help")
             or (message.text == "/?")
         ):
-            send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit")
+            send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv")
+        if (
+            (message.text == "/ver")
+            or (message.text == "/sys")
+        ):
+            sys_prop = Miscellaneous.get_system_properties()
+            send_message(bot, message.chat.id, f"ОС: {sys_prop[0]}, версия {sys_prop[1]}, релиз {sys_prop[2]}. ОЗУ: всего: {sys_prop[3]}; используется: {sys_prop[4]}; свободно: {sys_prop[5]}; процент использования: {sys_prop[6]}.")
+        if message.text == "/printenv":
+            environment_variables = os.environ
+            cnt = 0
+            for key, value in environment_variables.items():
+                if cnt >= MSG_NUMBER_LIMIT:
+                    break
+                send_message(bot, message.chat.id, f"{key}: {value}")
+                cnt += 1
         if ( # команда завершения работы бота
             (message.text.lower() == "/quit")
             or (message.text.lower() == "/stop")
