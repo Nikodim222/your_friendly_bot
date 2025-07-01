@@ -2,6 +2,7 @@ from datetime import datetime
 import os, sys
 import socket
 import psutil, platform
+import random
 
 class Miscellaneous:
 
@@ -99,3 +100,30 @@ class Miscellaneous:
         available_memory: str = f'{memory.available / (1024**3):.2f} ГБ'
         percent_memory: str = f'{memory.percent}%'
         return os_name, os_version, os_release, total_memory, used_memory, available_memory, percent_memory
+
+    @staticmethod
+    def get_phrase_outta_file(filepath: str, codepage: str) -> str:
+        """
+        * Случайная строка из текстового файла
+        *
+        * @param Имя текстового файла
+        * @param Кодировка текстового файла
+        * @return Случайная строка из текстового файла
+        """
+        MAX_LINES_TO_READ: int = 1000  # ограничение на количество строк для чтения
+        if not Miscellaneous.is_file_readable(filepath):
+            return ""  # возвращаем пустую строку, если файл недоступен
+        try:
+            with open(filepath, "r", encoding=codepage) as f:
+                lines = []
+                for i, line in enumerate(f):
+                    if i >= MAX_LINES_TO_READ:
+                        break
+                    lines.append(line.strip())
+            lines = [line for line in lines if line]  # удаляем пустые строки из списка
+            if not lines:
+                return ""
+            random_phrase: str = random.choice(lines)  # выбираем случайную строку
+            return random_phrase
+        except Exception as e:
+            return ""

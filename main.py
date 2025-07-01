@@ -15,7 +15,7 @@
 
 import os
 import configparser
-from datetime import datetime
+import argparse
 
 import telebot
 from telebot import apihelper
@@ -99,6 +99,7 @@ def run_bot(api_token:str, http_proxy:str, https_proxy:str) -> None:
     def text(message): # вся ботовская "кухня" запрятана здесь
         global cnt
         global MSG_NUMBER_LIMIT
+        global GLOBAL_CODEPAGE
         Miscellaneous.print_message(f"Пользователь {message.from_user.id} (имя: {message.from_user.first_name}) оставил сообщение в Telegram: {chr(34)}{message.text}{chr(34)}.")
         if message.text == "hello":
             send_message(bot, message.chat.id, "И тебе hello!")
@@ -134,7 +135,7 @@ def run_bot(api_token:str, http_proxy:str, https_proxy:str) -> None:
             (message.text.lower() == "/help")
             or (message.text == "/?")
         ):
-            send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv")
+            send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send")
         if (
             (message.text == "/ver")
             or (message.text == "/sys")
@@ -149,6 +150,34 @@ def run_bot(api_token:str, http_proxy:str, https_proxy:str) -> None:
                     break
                 send_message(bot, message.chat.id, f"{key}: {value}")
                 cnt += 1
+        if message.text == "/phrase":
+            phrase: str = Miscellaneous.get_phrase_outta_file("phrase.txt", GLOBAL_CODEPAGE)
+            if not "".__eq__(phrase):
+                send_message(bot, message.chat.id, phrase)
+            else:
+                send_message(bot, message.chat.id, "Увы, фразы не заготовил.")
+        if (
+            (message.text == "/send")
+            or (message.text.strip().startswith("/send "))
+        ):
+            v_send: str = message.text
+            if v_send == "/send":
+                send_message(bot, message.chat.id, f"Команду {chr(34)}send{chr(34)} нужно вызывать с передачей ей идентификатора получателя и текстом сообщения. Пример вызова: /send --user_id 03007 --msg Привет!_Как_у_тебя_дела?")
+                send_message(bot, message.chat.id, "Строка должна быть неразрывной, вместо пробелов следует использовать символ подчёркивания.")
+            else:
+                v_send = v_send[len("/send "):].strip()
+                print(v_send)
+                send_parser = argparse.ArgumentParser(description="Отправка сообщения")
+                send_parser.add_argument("--user_id", type=int, help="Идентификатор получателя", required=True, dest="user_id")
+                send_parser.add_argument("--msg", type=str, help="Текст сообщения для получателя", required=True, dest="message")
+                try:
+                    send_args = send_parser.parse_args(v_send.split())
+                    send_message(bot, message.chat.id, "Отправка сообщения пользователю...")
+                    send_message(bot, send_args.user_id, send_args.message)
+                    send_message(bot, message.chat.id, "Сообщение отправлено пользователю.")
+                except SystemExit:
+                    send_message(bot, message.chat.id, f"Ошибка в команде {chr(34)}send{chr(34)}.")
+                    send_message(bot, message.chat.id, f"Введите {chr(34)}/send{chr(34)}, чтобы узнать, как правильно использовать команду.")
         if ( # команда завершения работы бота
             (message.text.lower() == "/quit")
             or (message.text.lower() == "/stop")
