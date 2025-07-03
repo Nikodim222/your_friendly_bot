@@ -3,6 +3,8 @@ import os, sys
 import socket
 import psutil, platform
 import random
+import requests
+from typing import Any
 
 class Miscellaneous:
 
@@ -11,7 +13,7 @@ class Miscellaneous:
         """
         * Получение текущей даты и времени
         *
-        * @param Текущая дата и время
+        * @return Текущая дата и время
         """
         return datetime.now().strftime('%d.%m.%Y %H:%M:%S')
 
@@ -20,7 +22,7 @@ class Miscellaneous:
         """
         * Вывод сообщения на экран с текущей датой и временем
         *
-        * @param Текст сообщения
+        * @param msg Текст сообщения
         """
         if not "".__eq__(msg):
             print(f"[{Miscellaneous.get_current_time()}] >> {msg}")
@@ -30,7 +32,7 @@ class Miscellaneous:
         """
         * Проверка доступности файла для чтения
         *
-        * @param Имя файла
+        * @param filepath Имя файла
         * @return True - файл доступа; False - файл недоступен
         """
         if (
@@ -50,7 +52,7 @@ class Miscellaneous:
         * @return Массив IP-адресов
         """
         ip_addresses = []
-        hostname:str = socket.gethostname()
+        hostname: str = socket.gethostname()
         try:
             ip_addresses = socket.gethostbyname_ex(hostname)[2] # Получаем список IP-адресов
         except socket.gaierror:
@@ -106,8 +108,8 @@ class Miscellaneous:
         """
         * Случайная строка из текстового файла
         *
-        * @param Имя текстового файла
-        * @param Кодировка текстового файла
+        * @param filepath Имя текстового файла
+        * @param codepage Кодировка текстового файла
         * @return Случайная строка из текстового файла
         """
         MAX_LINES_TO_READ: int = 1000  # ограничение на количество строк для чтения
@@ -127,3 +129,28 @@ class Miscellaneous:
             return random_phrase
         except Exception as e:
             return ""
+
+    @staticmethod
+    def get_url(url: str, http_proxy: str = "", https_proxy: str = "") -> Any:
+        """
+        * Запрашивает URL с использованием прокси-серверов (если указаны)
+        *
+        * @param url URL для запроса
+        * @param http_proxy HTTP прокси
+        * @param https_proxy HTTPS прокси
+        * @return Список строк
+        """
+        proxies: Any = {}
+        if http_proxy:
+            proxies["http"] = http_proxy
+        if https_proxy:
+            proxies["https"] = https_proxy
+        try:
+            response: requests.Response = requests.get(url, proxies=proxies, stream=True)
+            response.raise_for_status()
+            lines = [line.decode(response.encoding, errors='ignore') for line in response.iter_lines(decode_unicode=False, delimiter=b'\n')]
+            return lines
+        except requests.exceptions.RequestException:
+            return []  # Error during request
+        except Exception:
+            return [] # An unexpected error
