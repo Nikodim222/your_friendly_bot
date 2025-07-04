@@ -16,6 +16,7 @@
 import os
 import configparser
 import argparse
+import time, threading
 
 from requests.exceptions import ProxyError
 from telebot.apihelper import ApiTelegramException
@@ -154,7 +155,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
             (message.text.lower() == "/help")
             or (message.text == "/?")
         ):
-            send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip")
+            send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer")
         if (
             (message.text == "/ver")
             or (message.text == "/sys")
@@ -175,6 +176,31 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                 send_message(bot, message.chat.id, phrase)
             else:
                 send_message(bot, message.chat.id, "Увы, фразы не заготовил.")
+        if (
+            (message.text == "/timer")
+            or (message.text.strip().startswith("/timer "))
+        ):
+            TIMER_ERR_MSG: str = f"Команду {chr(34)}timer{chr(34)} нужно вызывать с передачей ей количества секунд (натуральное число). Пример вызова: /timer 15"
+            v_timer: str = message.text
+            if v_timer == "/timer":
+                send_message(bot, message.chat.id, TIMER_ERR_MSG)
+            else:
+                try:
+                    timer_seconds: int = int(v_timer.split()[1])
+                    if timer_seconds <= 0:
+                        send_message(bot, message.chat.id, TIMER_ERR_MSG)
+                    else:
+                        # выделение в системе отдельного потока для таймера
+                        thread: threading.Thread = threading.Thread(
+                            target=lambda: ( # код обработчика таймера
+                                time.sleep(timer_seconds),
+                                send_message(bot, message.chat.id, "Время истекло!")
+                            )
+                        )
+                        thread.start()
+                        send_message(bot, message.chat.id, f"Таймер установлен на {timer_seconds} секунд.")
+                except (IndexError, ValueError):
+                    send_message(bot, message.chat.id, TIMER_ERR_MSG)
         if (
             (message.text == "/send")
             or (message.text.strip().startswith("/send "))
