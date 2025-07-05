@@ -1,0 +1,5 @@
+.gitignore
+settings.*
+__pycache__/
+phrase.txt
+bot_logo.png
