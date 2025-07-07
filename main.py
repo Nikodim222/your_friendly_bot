@@ -98,173 +98,180 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
     * Запуск Telegram-бота
     """
     Miscellaneous.print_message("Токен успешно определён.")
-    bot: telebot = telebot.TeleBot(api_token)
-    apihelper.proxy = {}  # создаём пустой словарь
-    if not "".__eq__(http_proxy):
-        apihelper.proxy['http'] = http_proxy
-    if not "".__eq__(https_proxy):
-        apihelper.proxy['https'] = https_proxy
-    """
-    * *************************
-    * ОБРАБОТКА ЗАПРОСОВ ОТ ПОЛЬЗОВАТЕЛЯ
-    * (НАЧАЛО)
-    * *************************
-    """
-    @bot.message_handler(content_types=["text"])
-    def text(message): # вся ботовская "кухня" запрятана здесь
-        global cnt
-        global MSG_NUMBER_LIMIT
-        global GLOBAL_CODEPAGE
-        global SETTINGS_FILE
-        api_token: str = ""
-        http_proxy: str = ""
-        https_proxy: str = ""
-        api_token, http_proxy, https_proxy = get_bot_config()
-        Miscellaneous.print_message(f"Пользователь {message.from_user.id} (имя: {message.from_user.first_name}) оставил сообщение в Telegram: {chr(34)}{message.text}{chr(34)}.")
-        if message.text == "hello":
-            send_message(bot, message.chat.id, "И тебе hello!")
-        if message.text == "/ip":
-            local_ips = Miscellaneous.get_local_ip_addresses()
-            if local_ips:
-                send_message(bot, message.chat.id, "Локальные IP-адреса:")
-                for ip in local_ips:
-                    send_message(bot, message.chat.id, ip)
-            else:
-                send_message(bot, message.chat.id, "Не удалось получить локальные IP-адреса.")
-        if message.text == "/username":
-            send_message(bot, message.chat.id, Miscellaneous.get_username())
-        if (
-            (message.text == "/ps")
-            or (message.text == "/process")
-            or (message.text == "/processes")
-        ):
-            cnt = 0
-            processes = Miscellaneous.get_running_processes()
-            for process_name in processes:
-                if cnt >= MSG_NUMBER_LIMIT:
-                    break
-                send_message(bot, message.chat.id, process_name)
-                cnt += 1
-            send_message(bot, message.chat.id, f"Общее количество процессов: {len(processes)}.")
-        if (
-            (message.text == "/date")
-            or (message.text == "/time")
-        ):
-            send_message(bot, message.chat.id, f"Текущая дата: {Miscellaneous.get_current_time()}.")
-        if (
-            (message.text.lower() == "/help")
-            or (message.text == "/?")
-        ):
-            send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer")
-        if (
-            (message.text == "/ver")
-            or (message.text == "/sys")
-        ):
-            sys_prop = Miscellaneous.get_system_properties()
-            send_message(bot, message.chat.id, f"ОС: {sys_prop[0]}, версия {sys_prop[1]}, релиз {sys_prop[2]}. ОЗУ: всего: {sys_prop[3]}; используется: {sys_prop[4]}; свободно: {sys_prop[5]}; процент использования: {sys_prop[6]}.")
-        if message.text == "/printenv":
-            environment_variables = os.environ
-            cnt = 0
-            for key, value in environment_variables.items():
-                if cnt >= MSG_NUMBER_LIMIT:
-                    break
-                send_message(bot, message.chat.id, f"{key}: {value}")
-                cnt += 1
-        if message.text == "/phrase":
-            phrase: str = Miscellaneous.get_phrase_outta_file("phrase.txt", GLOBAL_CODEPAGE)
-            if not "".__eq__(phrase):
-                send_message(bot, message.chat.id, phrase)
-            else:
-                send_message(bot, message.chat.id, "Увы, фразы не заготовил.")
-        if (
-            (message.text == "/timer")
-            or (message.text.strip().startswith("/timer "))
-        ):
-            TIMER_ERR_MSG: str = f"Команду {chr(34)}timer{chr(34)} нужно вызывать с передачей ей количества секунд (натуральное число). Пример вызова: /timer 15"
-            v_timer: str = message.text
-            if v_timer == "/timer":
-                send_message(bot, message.chat.id, TIMER_ERR_MSG)
-            else:
-                try:
-                    timer_seconds: int = int(v_timer.split()[1])
-                    if timer_seconds <= 0:
-                        send_message(bot, message.chat.id, TIMER_ERR_MSG)
-                    else:
-                        # выделение в системе отдельного потока для таймера
-                        thread: threading.Thread = threading.Thread(
-                            target=lambda: ( # код обработчика таймера
-                                time.sleep(timer_seconds),
-                                send_message(bot, message.chat.id, "Время истекло!")
-                            )
-                        )
-                        thread.start()
-                        send_message(bot, message.chat.id, f"Таймер установлен на {timer_seconds} секунд.")
-                except (IndexError, ValueError):
-                    send_message(bot, message.chat.id, TIMER_ERR_MSG)
-        if (
-            (message.text == "/send")
-            or (message.text.strip().startswith("/send "))
-        ):
-            v_send: str = message.text
-            if v_send == "/send":
-                send_message(bot, message.chat.id, f"Команду {chr(34)}send{chr(34)} нужно вызывать с передачей ей идентификатора получателя и текстом сообщения. Пример вызова: /send --user_id 03007 --msg Привет!_Как_у_тебя_дела?")
-                send_message(bot, message.chat.id, "Строка должна быть неразрывной, вместо пробелов следует использовать символ подчёркивания.")
-            else:
-                v_send = v_send[len("/send "):].strip()
-                print(v_send)
-                send_parser = argparse.ArgumentParser(description="Отправка сообщения")
-                send_parser.add_argument("--user_id", type=int, help="Идентификатор получателя", required=True, dest="user_id")
-                send_parser.add_argument("--msg", type=str, help="Текст сообщения для получателя", required=True, dest="message")
-                try:
-                    send_args = send_parser.parse_args(v_send.split())
-                    send_message(bot, message.chat.id, "Отправка сообщения пользователю...")
-                    send_message(bot, send_args.user_id, send_args.message)
-                    send_message(bot, message.chat.id, "Сообщение отправлено пользователю.")
-                except SystemExit:
-                    send_message(bot, message.chat.id, f"Ошибка в команде {chr(34)}send{chr(34)}.")
-                    send_message(bot, message.chat.id, f"Введите {chr(34)}/send{chr(34)}, чтобы узнать, как правильно использовать команду.")
-        if message.text == "/weather":
-            weather_lines = Miscellaneous.get_url("https://wttr.in/?0T", http_proxy, https_proxy)
-            if weather_lines:
-                send_message(bot, message.chat.id, "Получен прогноз погоды. Данные представлены ниже.")
-                for weather_line in weather_lines:
-                    send_message(bot, message.chat.id, weather_line)
-            else:
-                send_message(bot, message.chat.id, "Прогноз погоды недоступен в данный момент времени.")
-        if message.text == "/outer_ip":
-            outer_ip_lines = Miscellaneous.get_url("https://icanhazip.com", http_proxy, https_proxy)
-            if outer_ip_lines:
-                send_message(bot, message.chat.id, "Получены данные по внешнему IP-адресу. Они представлены ниже.")
-                for outer_ip_line in outer_ip_lines:
-                    send_message(bot, message.chat.id, outer_ip_line)
-            else:
-                send_message(bot, message.chat.id, f"Невозможно определить {chr(34)}белый{chr(34)} IP-адрес.")
-        if ( # команда завершения работы бота
-            (message.text.lower() == "/quit")
-            or (message.text.lower() == "/stop")
-            or (message.text.lower() == "/exit")
-        ):
-            send_message(bot, message.chat.id, "Goodbye, cruel world! Никогда больше к вам не вернусь.")
-            bot.stop_poll
-            os._exit(0)
-    """
-    * *************************
-    * ОБРАБОТКА ЗАПРОСОВ ОТ ПОЛЬЗОВАТЕЛЯ
-    * (КОНЕЦ)
-    * *************************
-    """
-    Miscellaneous.print_message("Telegram-бот запущен и ожидает команд пользователя в мессенджере.")
-    Miscellaneous.print_message("Для остановки программы нажмите Ctrl+C в текущем сеансе или введите /quit в Telegram.")
+    bot: telebot = None
     try:
-        bot.polling(none_stop=False, interval=0)
-    except KeyboardInterrupt: # перехват Ctrl+C
-        pass
-    except ProxyError as err_proxy:
-        print_error("Произошла ошибка proxy-сервера.", f"{err_proxy}")
-    except ApiTelegramException as err_api:
-        print_error("Произошла ошибка доступа к Telegram API.", f"{err_api}")
-    except ReadTimeout as err_read:
-        print_error("Слишком большое время отклика от сервера Telegram.", f"{err_read}")
+        bot = telebot.TeleBot(api_token)
+    except ValueError as err_token:
+        print_error("Значение токена задано неверно.", f"{err_token}")
+    if bot is not None:
+        apihelper.proxy = {}  # создаём пустой словарь
+        if not "".__eq__(http_proxy):
+            apihelper.proxy['http'] = http_proxy
+        if not "".__eq__(https_proxy):
+            apihelper.proxy['https'] = https_proxy
+        """
+        * *************************
+        * ОБРАБОТКА ЗАПРОСОВ ОТ ПОЛЬЗОВАТЕЛЯ
+        * (НАЧАЛО)
+        * *************************
+        """
+        @bot.message_handler(content_types=["text"])
+        def text(message): # вся ботовская "кухня" запрятана здесь
+            global cnt
+            global MSG_NUMBER_LIMIT
+            global GLOBAL_CODEPAGE
+            global SETTINGS_FILE
+            api_token: str = ""
+            http_proxy: str = ""
+            https_proxy: str = ""
+            api_token, http_proxy, https_proxy = get_bot_config()
+            Miscellaneous.print_message(f"Пользователь {message.from_user.id} (имя: {message.from_user.first_name}) оставил сообщение в Telegram: {chr(34)}{message.text}{chr(34)}.")
+            if message.text == "hello":
+                send_message(bot, message.chat.id, "И тебе hello!")
+            if message.text == "/ip":
+                local_ips = Miscellaneous.get_local_ip_addresses()
+                if local_ips:
+                    send_message(bot, message.chat.id, "Локальные IP-адреса:")
+                    for ip in local_ips:
+                        send_message(bot, message.chat.id, ip)
+                else:
+                    send_message(bot, message.chat.id, "Не удалось получить локальные IP-адреса.")
+            if message.text == "/username":
+                send_message(bot, message.chat.id, Miscellaneous.get_username())
+            if (
+                (message.text == "/ps")
+                or (message.text == "/process")
+                or (message.text == "/processes")
+            ):
+                cnt = 0
+                processes = Miscellaneous.get_running_processes()
+                for process_name in processes:
+                    if cnt >= MSG_NUMBER_LIMIT:
+                        break
+                    send_message(bot, message.chat.id, process_name)
+                    cnt += 1
+                send_message(bot, message.chat.id, f"Общее количество процессов: {len(processes)}.")
+            if (
+                (message.text == "/date")
+                or (message.text == "/time")
+            ):
+                send_message(bot, message.chat.id, f"Текущая дата: {Miscellaneous.get_current_time()}.")
+            if (
+                (message.text.lower() == "/help")
+                or (message.text == "/?")
+            ):
+                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer")
+            if (
+                (message.text == "/ver")
+                or (message.text == "/sys")
+            ):
+                sys_prop = Miscellaneous.get_system_properties()
+                send_message(bot, message.chat.id, f"ОС: {sys_prop[0]}, версия {sys_prop[1]}, релиз {sys_prop[2]}. ОЗУ: всего: {sys_prop[3]}; используется: {sys_prop[4]}; свободно: {sys_prop[5]}; процент использования: {sys_prop[6]}.")
+            if message.text == "/printenv":
+                environment_variables = os.environ
+                cnt = 0
+                for key, value in environment_variables.items():
+                    if cnt >= MSG_NUMBER_LIMIT:
+                        break
+                    send_message(bot, message.chat.id, f"{key}: {value}")
+                    cnt += 1
+            if message.text == "/phrase":
+                phrase: str = Miscellaneous.get_phrase_outta_file("phrase.txt", GLOBAL_CODEPAGE)
+                if not "".__eq__(phrase):
+                    send_message(bot, message.chat.id, phrase)
+                else:
+                    send_message(bot, message.chat.id, "Увы, фразы не заготовил.")
+            if (
+                (message.text == "/timer")
+                or (message.text.strip().startswith("/timer "))
+            ):
+                TIMER_ERR_MSG: str = f"Команду {chr(34)}timer{chr(34)} нужно вызывать с передачей ей количества секунд (натуральное число). Пример вызова: /timer 15"
+                v_timer: str = message.text
+                if v_timer == "/timer":
+                    send_message(bot, message.chat.id, TIMER_ERR_MSG)
+                else:
+                    try:
+                        timer_seconds: int = int(v_timer.split()[1])
+                        if timer_seconds <= 0:
+                            send_message(bot, message.chat.id, TIMER_ERR_MSG)
+                        else:
+                            # выделение в системе отдельного потока для таймера
+                            thread: threading.Thread = threading.Thread(
+                                target=lambda: ( # код обработчика таймера
+                                    time.sleep(timer_seconds),
+                                    send_message(bot, message.chat.id, "Время истекло!")
+                                )
+                            )
+                            thread.start()
+                            send_message(bot, message.chat.id, f"Таймер установлен на {timer_seconds} секунд.")
+                    except (IndexError, ValueError):
+                        send_message(bot, message.chat.id, TIMER_ERR_MSG)
+            if (
+                (message.text == "/send")
+                or (message.text.strip().startswith("/send "))
+            ):
+                v_send: str = message.text
+                if v_send == "/send":
+                    send_message(bot, message.chat.id, f"Команду {chr(34)}send{chr(34)} нужно вызывать с передачей ей идентификатора получателя и текстом сообщения. Пример вызова: /send --user_id 03007 --msg Привет!_Как_у_тебя_дела?")
+                    send_message(bot, message.chat.id, "Строка должна быть неразрывной, вместо пробелов следует использовать символ подчёркивания.")
+                else:
+                    v_send = v_send[len("/send "):].strip()
+                    print(v_send)
+                    send_parser = argparse.ArgumentParser(description="Отправка сообщения")
+                    send_parser.add_argument("--user_id", type=int, help="Идентификатор получателя", required=True, dest="user_id")
+                    send_parser.add_argument("--msg", type=str, help="Текст сообщения для получателя", required=True, dest="message")
+                    try:
+                        send_args = send_parser.parse_args(v_send.split())
+                        send_message(bot, message.chat.id, "Отправка сообщения пользователю...")
+                        send_message(bot, send_args.user_id, send_args.message)
+                        send_message(bot, message.chat.id, "Сообщение отправлено пользователю.")
+                    except SystemExit:
+                        send_message(bot, message.chat.id, f"Ошибка в команде {chr(34)}send{chr(34)}.")
+                        send_message(bot, message.chat.id, f"Введите {chr(34)}/send{chr(34)}, чтобы узнать, как правильно использовать команду.")
+            if message.text == "/weather":
+                weather_lines = Miscellaneous.get_url("https://wttr.in/?0T", http_proxy, https_proxy)
+                if weather_lines:
+                    send_message(bot, message.chat.id, "Получен прогноз погоды. Данные представлены ниже.")
+                    for weather_line in weather_lines:
+                        send_message(bot, message.chat.id, weather_line)
+                else:
+                    send_message(bot, message.chat.id, "Прогноз погоды недоступен в данный момент времени.")
+            if message.text == "/outer_ip":
+                outer_ip_lines = Miscellaneous.get_url("https://icanhazip.com", http_proxy, https_proxy)
+                if outer_ip_lines:
+                    send_message(bot, message.chat.id, "Получены данные по внешнему IP-адресу. Они представлены ниже.")
+                    for outer_ip_line in outer_ip_lines:
+                        send_message(bot, message.chat.id, outer_ip_line)
+                else:
+                    send_message(bot, message.chat.id, f"Невозможно определить {chr(34)}белый{chr(34)} IP-адрес.")
+            if ( # команда завершения работы бота
+                (message.text.lower() == "/quit")
+                or (message.text.lower() == "/stop")
+                or (message.text.lower() == "/exit")
+            ):
+                send_message(bot, message.chat.id, "Goodbye, cruel world! Никогда больше к вам не вернусь.")
+                bot.stop_poll
+                os._exit(0)
+        """
+        * *************************
+        * ОБРАБОТКА ЗАПРОСОВ ОТ ПОЛЬЗОВАТЕЛЯ
+        * (КОНЕЦ)
+        * *************************
+        """
+        Miscellaneous.print_message("Telegram-бот запущен и ожидает команд пользователя в мессенджере.")
+        Miscellaneous.print_message("Для остановки программы нажмите Ctrl+C в текущем сеансе или введите /quit в Telegram.")
+        try:
+            bot.polling(none_stop=False, interval=0)
+        except KeyboardInterrupt: # перехват Ctrl+C
+            pass
+        except ProxyError as err_proxy:
+            print_error("Произошла ошибка proxy-сервера.", f"{err_proxy}")
+        except ApiTelegramException as err_api:
+            print_error("Произошла ошибка доступа к Telegram API.", f"{err_api}")
+        except ReadTimeout as err_read:
+            print_error("Слишком большое время отклика от сервера Telegram.", f"{err_read}")
+        except ValueError as err_token:
+            print_error("Значение токена задано неверно.", f"{err_token}")
     return
 
 def main() -> None:
