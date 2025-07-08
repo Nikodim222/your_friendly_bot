@@ -8,6 +8,9 @@ export ABSOLUTE_FILENAME=`readlink -e "$0"`
 export DIRECTORY=`dirname "$ABSOLUTE_FILENAME"`
 cd $DIRECTORY
 
+echo '************'
+echo 'ПО "Твой дружелюбный бот"'
+echo '************'
 
 while true
 do
