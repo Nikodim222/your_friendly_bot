@@ -3,3 +3,6 @@ settings.*
 __pycache__/
 phrase.txt
 bot_logo.png
+README.md
+*.log
+.DS_Store
