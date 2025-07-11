@@ -24,6 +24,7 @@ from requests.exceptions import ReadTimeout
 
 import telebot
 from telebot import apihelper
+from telebot.types import Message
 
 from miscellaneous import Miscellaneous
 
@@ -80,8 +81,11 @@ def send_message(bot: telebot, chat_id: int, msg: str) -> None:
     * @param msg Текст сообщения
     """
     if not "".__eq__(msg):
-        bot.send_message(chat_id, msg)
-        Miscellaneous.print_message(f"Ответ пользователю {chat_id}: {chr(34)}{msg}{chr(34)}.")
+        reply_msg: Message = bot.send_message(chat_id, msg)
+        if reply_msg is not None and not "".__eq__(reply_msg.text):
+            Miscellaneous.print_message(f"Ответ пользователю {chat_id}: {chr(34)}{reply_msg.text}{chr(34)}.")
+        else:
+            Miscellaneous.print_message(f"Пользователю {chat_id} не удалось отправить сообщение.")
 
 def print_error(err_msg: str, err_code: str) -> None:
     """
