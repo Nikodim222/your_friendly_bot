@@ -13,6 +13,7 @@
 * @author Ефремов А. В., 30.06.2025
 """
 
+import logging, sys
 import os
 import configparser
 import argparse
@@ -31,7 +32,34 @@ from miscellaneous import Miscellaneous
 GLOBAL_CODEPAGE: str = "cp1251" # кодировка Windows-1251 в текстовых файлах
 SETTINGS_FILE: str = "settings.ini"  # путь к файлу конфигурации
 MSG_NUMBER_LIMIT: int = 15 # лимит на количество одновременных сообщений от бота к пользователю
+LOG_FILE: str = f"{__name__}.log" # имя файла для ведения лога
 cnt: int = 0
+
+class LoggerWriter:
+    """
+    * Класс, который перехватывает вывод в stdout/stderr
+    * и перенаправляет его в лог
+    """
+
+    def __init__(self, logger, level, original_stream):
+        self.logger = logger
+        self.level = level
+        self.original_stream = original_stream  # сохраняем ссылку на исходный поток
+
+    def write(self, message):
+        """
+        * Запись сообщения в лог
+        """
+        self.original_stream.write(message)  # выводим в исходный поток (консоль)
+        if message.rstrip() != "":  # Избегаем пустых строк
+            self.logger.log(self.level, message.rstrip())
+
+    def flush(self):
+        """
+        * Очистка буфера
+        * (не требуется, но рекомендуется реализовать)
+        """
+        self.original_stream.flush()  # очищаем и исходный поток
 
 def get_bot_config():
     """
@@ -41,16 +69,41 @@ def get_bot_config():
     """
     global SETTINGS_FILE
     global GLOBAL_CODEPAGE
+    global LOG_FILE
     GLOBAL_SECTION: str = "global"
     PROXY_SECTION: str = "proxy"
     NO_PROXY: str = "DIRECT"
     TOKEN: str = "api_token"
     HTTP_PROXY: str = "http"
     HTTPS_PROXY: str = "https"
+    DEBUG: str = "debug"
+    debugged: bool = False # режим отладки (по умолчанию отключён)
     config = configparser.ConfigParser()
     try:
         with open(SETTINGS_FILE, 'r', encoding=GLOBAL_CODEPAGE) as f:
             config.read_file(f)
+            if GLOBAL_SECTION in config and DEBUG in config[GLOBAL_SECTION]:
+                debugged = (config[GLOBAL_SECTION][DEBUG].upper().strip() == "Y")
+            if ( # проверка, что файл лога доступен для записи
+                (debugged == True)
+                and (os.path.exists(LOG_FILE))
+                and (os.path.isfile(LOG_FILE))
+                and (not os.access(LOG_FILE, os.W_OK))
+            ):
+                debugged = False
+            if debugged == True:
+                Miscellaneous.print_message("Отладка включена.")
+                logging.basicConfig(
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    filename=LOG_FILE, # логирование в файл
+                    level=logging.INFO
+                )
+                logger = logging.getLogger(__name__)
+                # Перенаправление stdout и stderr
+                sys.stdout = LoggerWriter(logger, logging.INFO, sys.stdout)  # перехватываем print
+                sys.stderr = LoggerWriter(logger, logging.ERROR, sys.stderr)  # перехватываем ошибки
+            else:
+                Miscellaneous.print_message("Отладка выключена.")
             if GLOBAL_SECTION in config and TOKEN in config[GLOBAL_SECTION]:
                 v_token: str = config[GLOBAL_SECTION][TOKEN].strip()
             if PROXY_SECTION in config and HTTP_PROXY in config[PROXY_SECTION]:
