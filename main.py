@@ -35,6 +35,8 @@ MSG_NUMBER_LIMIT: int = 15 # лимит на количество одновре
 LOG_FILE: str = f"{__name__}.log" # имя файла для ведения лога
 cnt: int = 0
 
+debugged: bool = False # режим отладки (по умолчанию отключён)
+
 class LoggerWriter:
     """
     * Класс, который перехватывает вывод в stdout/stderr
@@ -70,6 +72,7 @@ def get_bot_config():
     global SETTINGS_FILE
     global GLOBAL_CODEPAGE
     global LOG_FILE
+    global debugged
     GLOBAL_SECTION: str = "global"
     PROXY_SECTION: str = "proxy"
     NO_PROXY: str = "DIRECT"
@@ -77,33 +80,33 @@ def get_bot_config():
     HTTP_PROXY: str = "http"
     HTTPS_PROXY: str = "https"
     DEBUG: str = "debug"
-    debugged: bool = False # режим отладки (по умолчанию отключён)
     config = configparser.ConfigParser()
     try:
         with open(SETTINGS_FILE, 'r', encoding=GLOBAL_CODEPAGE) as f:
             config.read_file(f)
-            if GLOBAL_SECTION in config and DEBUG in config[GLOBAL_SECTION]:
-                debugged = (config[GLOBAL_SECTION][DEBUG].upper().strip() == "Y")
-            if ( # проверка, что файл лога доступен для записи
-                (debugged == True)
-                and (os.path.exists(LOG_FILE))
-                and (os.path.isfile(LOG_FILE))
-                and (not os.access(LOG_FILE, os.W_OK))
-            ):
-                debugged = False
-            if debugged == True:
-                Miscellaneous.print_message("Отладка включена.")
-                logging.basicConfig(
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    filename=LOG_FILE, # логирование в файл
-                    level=logging.INFO
-                )
-                logger = logging.getLogger(__name__)
-                # Перенаправление stdout и stderr
-                sys.stdout = LoggerWriter(logger, logging.INFO, sys.stdout)  # перехватываем print
-                sys.stderr = LoggerWriter(logger, logging.ERROR, sys.stderr)  # перехватываем ошибки
-            else:
-                Miscellaneous.print_message("Отладка выключена.")
+            if debugged == False: # включали и настраивали уже отладку?
+                if GLOBAL_SECTION in config and DEBUG in config[GLOBAL_SECTION]:
+                    debugged = (config[GLOBAL_SECTION][DEBUG].upper().strip() == "Y")
+                if ( # проверка, что файл лога доступен для записи
+                    (debugged == True)
+                    and (os.path.exists(LOG_FILE))
+                    and (os.path.isfile(LOG_FILE))
+                    and (not os.access(LOG_FILE, os.W_OK))
+                ):
+                    debugged = False
+                if debugged == True:
+                    Miscellaneous.print_message("Отладка включена.")
+                    logging.basicConfig(
+                        format='%(asctime)s - %(levelname)s - %(message)s',
+                        filename=LOG_FILE, # логирование в файл
+                        level=logging.INFO
+                    )
+                    logger = logging.getLogger(__name__)
+                    # Перенаправление stdout и stderr
+                    sys.stdout = LoggerWriter(logger, logging.INFO, sys.stdout)  # перехватываем print
+                    sys.stderr = LoggerWriter(logger, logging.ERROR, sys.stderr)  # перехватываем ошибки
+                else:
+                    Miscellaneous.print_message("Отладка выключена.")
             if GLOBAL_SECTION in config and TOKEN in config[GLOBAL_SECTION]:
                 v_token: str = config[GLOBAL_SECTION][TOKEN].strip()
             if PROXY_SECTION in config and HTTP_PROXY in config[PROXY_SECTION]:
