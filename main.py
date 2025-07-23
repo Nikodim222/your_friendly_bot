@@ -19,6 +19,9 @@ import configparser
 import argparse
 import time, threading
 
+import sqlite3
+from sqlite3 import IntegrityError, OperationalError, Error
+
 from requests.exceptions import ProxyError
 from telebot.apihelper import ApiTelegramException
 from requests.exceptions import ReadTimeout
@@ -28,9 +31,8 @@ from telebot import apihelper
 from telebot.types import Message
 
 from miscellaneous import Miscellaneous
+from models import Constant
 
-GLOBAL_CODEPAGE: str = "cp1251" # кодировка Windows-1251 в текстовых файлах
-SETTINGS_FILE: str = "settings.ini"  # путь к файлу конфигурации
 MSG_NUMBER_LIMIT: int = 15 # лимит на количество одновременных сообщений от бота к пользователю
 LOG_FILE: str = f"{__name__}.log" # имя файла для ведения лога
 cnt: int = 0
@@ -69,8 +71,6 @@ def get_bot_config():
     *
     * @return token, http_proxy, https_proxy
     """
-    global SETTINGS_FILE
-    global GLOBAL_CODEPAGE
     global LOG_FILE
     global debugged
     GLOBAL_SECTION: str = "global"
@@ -82,7 +82,7 @@ def get_bot_config():
     DEBUG: str = "debug"
     config = configparser.ConfigParser()
     try:
-        with open(SETTINGS_FILE, 'r', encoding=GLOBAL_CODEPAGE) as f:
+        with open(Constant.SETTINGS_FILE.value, 'r', encoding=Constant.GLOBAL_CODEPAGE.value) as f:
             config.read_file(f)
             if debugged == False: # включали и настраивали уже отладку?
                 if GLOBAL_SECTION in config and DEBUG in config[GLOBAL_SECTION]:
@@ -122,7 +122,7 @@ def get_bot_config():
             else:
                 return v_token, v_http_proxy, v_https_proxy
     except FileNotFoundError:
-        Miscellaneous.print_message(f"Ошибка: Файл настроек не найден: {SETTINGS_FILE}")
+        Miscellaneous.print_message(f"Ошибка: Файл настроек не найден: {Constant.SETTINGS_FILE.value}")
         return None, None, None
     except Exception as e:
         Miscellaneous.print_message(f"Ошибка при чтении файла настроек: {e}")
@@ -179,13 +179,46 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
         def text(message): # вся ботовская "кухня" запрятана здесь
             global cnt
             global MSG_NUMBER_LIMIT
-            global GLOBAL_CODEPAGE
-            global SETTINGS_FILE
+            global debugged
             api_token: str = ""
             http_proxy: str = ""
             https_proxy: str = ""
             api_token, http_proxy, https_proxy = get_bot_config()
             Miscellaneous.print_message(f"Пользователь {message.from_user.id} (имя: {message.from_user.first_name}) оставил сообщение в Telegram: {chr(34)}{message.text}{chr(34)}.")
+            if debugged == True: # если отладка включена, то начинаем писать в БД
+                with sqlite3.connect("telegram.db") as conn:
+                    cur = conn.cursor()
+                    try:
+                        cur.execute('''
+                            create table if not exists telegram_users (
+                              user_id integer primary key not null,
+                              first_name text,
+                              last_name text,
+                              date_create text not null default current_date
+                            )
+                        ''')
+                        cur.execute('''
+                            create table if not exists user_messages (
+                              user_id integer not null,
+                              msg text,
+                              date_create text not null default current_date,
+                              foreign key (user_id) references telegram_users(user_id)
+                            )
+                        ''')
+                        cur.execute("create index if not exists idx_user_messages_user_id_date_create on user_messages (user_id asc, date_create desc)")
+                        cur.execute("insert or ignore into telegram_users (user_id, first_name, last_name) values (?, ?, ?)", (message.from_user.id, message.from_user.first_name, message.from_user.last_name))
+                        cur.execute("insert into user_messages (user_id, msg) values (?, ?)", (message.from_user.id, message.text))
+                        conn.commit()
+                    except MemoryError as me:
+                        Miscellaneous.print_message(f"Ошибка: Недостаточно памяти для загрузки всех данных. {me}")
+                    except IntegrityError as e: # если запись в таблице уже есть, то просто выходим
+                        pass
+                    except OperationalError as e:
+                        Miscellaneous.print_message(f"База данных, по всей видимости, заблокирована, или ресурс недоступен: {e}")
+                    except Error as e:
+                        Miscellaneous.print_message(f"Произошла ошибка: {e}")
+                    finally:
+                        cur.close()
             if message.text == "hello":
                 send_message(bot, message.chat.id, "И тебе hello!")
             if message.text == "/ip":
@@ -236,7 +269,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                     send_message(bot, message.chat.id, f"{key}: {value}")
                     cnt += 1
             if message.text == "/phrase":
-                phrase: str = Miscellaneous.get_phrase_outta_file("phrase.txt", GLOBAL_CODEPAGE)
+                phrase: str = Miscellaneous.get_phrase_outta_file("phrase.txt", Constant.GLOBAL_CODEPAGE.value)
                 if not "".__eq__(phrase):
                     send_message(bot, message.chat.id, phrase)
                 else:
@@ -335,16 +368,15 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
     return
 
 def main() -> None:
-    global SETTINGS_FILE
     api_token: str = ""
     http_proxy: str = ""
     https_proxy: str = ""
     Miscellaneous.print_message("Запуск Telegram-бота...")
-    if Miscellaneous.is_file_readable(SETTINGS_FILE):
-        Miscellaneous.print_message(f"Файл настроек найден: {SETTINGS_FILE}")
+    if Miscellaneous.is_file_readable(Constant.SETTINGS_FILE.value):
+        Miscellaneous.print_message(f"Файл настроек найден: {Constant.SETTINGS_FILE.value}")
         api_token, http_proxy, https_proxy = get_bot_config()
     else:
-        Miscellaneous.print_message(f"Ошибка: Файл настроек не найден: {SETTINGS_FILE}")
+        Miscellaneous.print_message(f"Ошибка: Файл настроек не найден: {Constant.SETTINGS_FILE.value}")
     if "".__eq__(api_token):
         Miscellaneous.print_message("Токен для Telegram-бота не найден.")
     else:
