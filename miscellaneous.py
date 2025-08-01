@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import os, sys
 import socket
 import psutil, platform
@@ -154,3 +154,15 @@ class Miscellaneous:
             return []  # Error during request
         except Exception:
             return [] # An unexpected error
+
+    @staticmethod
+    def get_delta_time(p_seconds: int) -> str:
+        """
+        * Вычисление времени по дельте относительно текущего времени
+        *
+        * @param p_seconds Целочисленное количество секунд
+        * @return Строка времени в формате "hh24:mi:ss"
+        """
+        my_datetime: datetime = datetime.today()
+        my_datetime_sec: datetime = my_datetime + timedelta(seconds = p_seconds)
+        return my_datetime_sec.time().strftime("%H:%M:%S")

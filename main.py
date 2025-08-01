@@ -253,7 +253,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                 (message.text.lower() == "/help")
                 or (message.text == "/?")
             ):
-                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer")
+                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer, /calc")
             if (
                 (message.text == "/ver")
                 or (message.text == "/sys")
@@ -300,6 +300,21 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                     except (IndexError, ValueError):
                         send_message(bot, message.chat.id, TIMER_ERR_MSG)
             if (
+                (message.text == "/calc")
+                or (message.text.strip().startswith("/calc "))
+            ):
+                CALC_ERR_MSG: str = f"Команду {chr(34)}calc{chr(34)} нужно вызывать с передачей ей количества секунд (любое целое число). Пример вызова: /calc -30135"
+                v_calc: str = message.text
+                if v_calc == "/calc":
+                    send_message(bot, message.chat.id, CALC_ERR_MSG)
+                else:
+                    try:
+                        calc_seconds: int = int(v_calc.split()[1])
+                        delta_time: str = Miscellaneous.get_delta_time(calc_seconds)
+                        send_message(bot, message.chat.id, f"Для заданного количества секунд ({calc_seconds}) относительно текущего времени {Miscellaneous.get_current_time()} получается следующее время: {delta_time}.")
+                    except (IndexError, ValueError):
+                        send_message(bot, message.chat.id, CALC_ERR_MSG)
+            if (
                 (message.text == "/send")
                 or (message.text.strip().startswith("/send "))
             ):
@@ -318,6 +333,8 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         send_message(bot, message.chat.id, "Отправка сообщения пользователю...")
                         send_message(bot, send_args.user_id, send_args.message)
                         send_message(bot, message.chat.id, "Сообщение отправлено пользователю.")
+                    except ApiTelegramException as err_api:
+                        print_error("Вероятно, нет прав для отправки сообщения указанному адресату.", f"{err_api}")
                     except SystemExit:
                         send_message(bot, message.chat.id, f"Ошибка в команде {chr(34)}send{chr(34)}.")
                         send_message(bot, message.chat.id, f"Введите {chr(34)}/send{chr(34)}, чтобы узнать, как правильно использовать команду.")
