@@ -5,6 +5,7 @@ import psutil, platform
 import random
 import requests
 from typing import Any
+import subprocess, shlex
 
 class Miscellaneous:
 
@@ -166,3 +167,77 @@ class Miscellaneous:
         my_datetime: datetime = datetime.today()
         my_datetime_sec: datetime = my_datetime + timedelta(seconds = p_seconds)
         return my_datetime_sec.time().strftime("%H:%M:%S")
+
+    @staticmethod
+    def run_command(command: str, output_file: str = None) -> int:
+        try:
+            output_lines = []
+            process = subprocess.Popen(
+                command,
+                stdout = subprocess.PIPE,  # Перехватываем стандартный вывод
+                stderr = subprocess.PIPE,  # Перехватываем стандартный вывод ошибок (по желанию)
+                text = True  # Чтобы получать вывод в виде строк, а не байтов
+            )
+            stdout, stderr = process.communicate()  # Получаем вывод и ошибки
+            if output_file is not None:
+                with open(output_file, "w") as f:
+                    f.write(stdout)
+            else:
+                print(stdout)
+                output_lines = stdout.splitlines() # Разделяем вывод на строки
+            if stderr is not None:
+                print(f"Ошибки:\n{stderr}")  # Выводим ошибки, если они есть
+            return output_lines, process.returncode
+        except FileNotFoundError:
+            print(f"Ошибка: Команда '{command[0]}' не найдена.")
+            return output_lines, 1
+        except PermissionError:
+            print("Ошибка доступа к файлу.")
+            return output_lines, 2
+        except Exception as e:
+            print(f"Произошла ошибка: {e}")
+            return output_lines, 3
+
+    @staticmethod
+    def run_command_from_string(command_string: str, output_file: str = None) -> int:
+        if not "".__eq__(command_string):
+            try:
+                command = shlex.split(command_string)
+                return Miscellaneous.run_command(command, output_file)
+            except Exception as e:
+                print(f"Ошибка разбора команды: {e}")
+                return [], 1
+        else:
+            return 0
+
+    @staticmethod
+    def is_dangerous_command(p_cmd: str) -> bool:
+        """
+        * Признак того, что команда содержит опасные элементы
+        *
+        * @param p_cmd Исходная команда
+        * @return True - содержит опасные элементы; False - не содержит опасные элементы
+        """
+        DANGEROUS_COMMANDS = [
+            "rm", "rd", "rmdir", "del",
+            "erase", "format", "dd", "mkfs",
+            "fdisk", "cp", "mv", "chmod",
+            "chown", "attrib", "tar", "zip",
+            "unzip", "rar", "unrar", "parted",
+            "tune2fs", "nano", "vi", "vim",
+            "edit", "mc", "sys", "service",
+            "systemctl", "poweroff", "reboot", "halt",
+            "su", "sudo", "logout", "kill", "pkill",
+            "touch", "copy", "ren", ".py",
+            ".java", ".rb", "configure", "make",
+            "cmake", ".cmd", ".sh", ".bat", ".exe",
+            ".com", "telnet", "irssi", "ssh",
+            "read", "choice", "set", "export",
+            "checkinstall"
+        ]
+        p_cmd = p_cmd.lower().strip()
+        cmd_parts = shlex.split(p_cmd)
+        for command in DANGEROUS_COMMANDS:
+            if command in cmd_parts:
+                return True
+        return False

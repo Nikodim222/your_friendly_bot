@@ -18,6 +18,7 @@ import os
 import configparser
 import argparse
 import time, threading
+import shlex
 
 import sqlite3
 from sqlite3 import IntegrityError, OperationalError, Error
@@ -253,7 +254,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                 (message.text.lower() == "/help")
                 or (message.text == "/?")
             ):
-                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer, /calc")
+                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer, /calc, /cmd")
             if (
                 (message.text == "/ver")
                 or (message.text == "/sys")
@@ -314,6 +315,28 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         send_message(bot, message.chat.id, f"Для заданного количества секунд ({calc_seconds}) относительно текущего времени {Miscellaneous.get_current_time()} получается следующее время: {delta_time}.")
                     except (IndexError, ValueError):
                         send_message(bot, message.chat.id, CALC_ERR_MSG)
+            if (
+                (message.text == "/cmd")
+                or (message.text.strip().startswith("/cmd "))
+            ):
+                v_cmd: str = message.text
+                if v_cmd == "/cmd":
+                    send_message(bot, message.chat.id, f"В строке команды {chr(34)}cmd{chr(34)} задаётся вызов программы (и возможные параметры), которую требуется выполнить под операционной системой.")
+                else:
+                    cmd_parts = shlex.split(v_cmd)
+                    cmd_os: str = " ".join(cmd_parts[1:])
+                    if not Miscellaneous.is_dangerous_command(cmd_os):
+                        cmd_output_lines, cmd_return_code = Miscellaneous.run_command_from_string(cmd_os)
+                        if cmd_output_lines: # Проверяем, что список не пустой
+                            cnt = 0
+                            for cmd_line in cmd_output_lines:
+                                if cnt >= MSG_NUMBER_LIMIT:
+                                    break
+                                send_message(bot, message.chat.id, cmd_line)
+                                cnt += 1
+                            send_message(bot, message.chat.id, f"Код возврата: {cmd_return_code}")
+                    else:
+                        send_message(bot, message.chat.id, "Эта команда недопустима, поскольку является опасной.")
             if (
                 (message.text == "/send")
                 or (message.text.strip().startswith("/send "))
