@@ -254,13 +254,30 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                 (message.text.lower() == "/help")
                 or (message.text == "/?")
             ):
-                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer, /calc, /cmd")
+                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer, /calc, /cmd, /rss, /news")
             if (
                 (message.text == "/ver")
                 or (message.text == "/sys")
             ):
                 sys_prop = Miscellaneous.get_system_properties()
                 send_message(bot, message.chat.id, f"ОС: {sys_prop[0]}, версия {sys_prop[1]}, релиз {sys_prop[2]}. ОЗУ: всего: {sys_prop[3]}; используется: {sys_prop[4]}; свободно: {sys_prop[5]}; процент использования: {sys_prop[6]}.")
+            if (
+                (message.text == "/rss")
+                or (message.text == "/news")
+            ):
+                rss_titles = []
+                rss_links = []
+                RSS_FEED_URL: str = "https://habr.com/ru/rss/hub/webdev/all/?fl=ru"
+                rss_protocol: str = (RSS_FEED_URL.split(":")[0].lower() if ":" in RSS_FEED_URL else "")
+                if not "".__eq__(http_proxy) or not "".__eq__(https_proxy):
+                    if rss_protocol == "http" and not "".__eq__(http_proxy):
+                        rss_titles, rss_links = Miscellaneous.read_rss_feed(RSS_FEED_URL, MSG_NUMBER_LIMIT, rss_protocol, http_proxy)
+                    if rss_protocol == "https" and not "".__eq__(https_proxy):
+                        rss_titles, rss_links = Miscellaneous.read_rss_feed(RSS_FEED_URL, MSG_NUMBER_LIMIT, rss_protocol, https_proxy)
+                else:
+                    rss_titles, rss_links = Miscellaneous.read_rss_feed(RSS_FEED_URL, MSG_NUMBER_LIMIT)
+                for rss_title, rss_link in zip(rss_titles, rss_links):
+                    send_message(bot, message.chat.id, f"{rss_title}: {rss_link}")
             if message.text == "/printenv":
                 environment_variables = os.environ
                 cnt = 0

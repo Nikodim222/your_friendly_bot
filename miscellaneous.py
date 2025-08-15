@@ -6,6 +6,9 @@ import random
 import requests
 from typing import Any
 import subprocess, shlex
+import feedparser
+from feedparser import FeedParserDict
+from urllib.request import ProxyHandler
 
 class Miscellaneous:
 
@@ -241,3 +244,31 @@ class Miscellaneous:
             if command in cmd_parts:
                 return True
         return False
+
+    @staticmethod
+    def read_rss_feed(feed_url: str, lim: int = 10, proxy_type: str = None, proxy_server: str = None):
+        """
+        * Чтение новостной ленты RSS
+        *
+        * @param feed_url URL для RSS
+        * @param lim Максимальное количество новостных строк
+        * @param proxy_type Тип proxy-сервера
+        * @param proxy_server URL proxy-сервера
+        * @return Заголовки и ссылки новостей RSS
+        """
+        titles = []
+        links = []
+        if not "".__eq__(feed_url):
+            isThroughProxy: bool = False
+            proxy_handler: ProxyHandler = None
+            if proxy_type is not None and proxy_server is not None:
+                proxy_handler = ProxyHandler({proxy_type: proxy_server})
+                isThroughProxy = True
+            feed: FeedParserDict = feedparser.parse(feed_url) if not isThroughProxy else feedparser.parse(feed_url, handlers=[proxy_handler])
+            if not feed.bozo: # условие, когда нет ошибок в RSS
+                titles.append(feed.feed.title) # Feed Title
+                links.append(feed.feed.link) # Feed Link
+                for entry in feed.entries[:10]: # display only the latest 10 entries
+                    titles.append(entry.title)
+                    links.append(entry.link)
+        return titles, links
