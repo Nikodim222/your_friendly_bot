@@ -33,12 +33,17 @@ from telebot.types import Message
 
 from miscellaneous import Miscellaneous
 from models import Constant
+from ircbot import IRCBot
+from irc.client import ServerNotConnectedError
 
 MSG_NUMBER_LIMIT: int = 15 # лимит на количество одновременных сообщений от бота к пользователю
 LOG_FILE: str = f"{__name__}.log" # имя файла для ведения лога
 cnt: int = 0
 
 debugged: bool = False # режим отладки (по умолчанию отключён)
+
+is_irc_bot_running = False # признак работы IRC-бота
+irc_bot: IRCBot = None
 
 class LoggerWriter:
     """
@@ -181,6 +186,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
             global cnt
             global MSG_NUMBER_LIMIT
             global debugged
+            global is_irc_bot_running, irc_bot # глобальные переменные для IRC-бота
             api_token: str = ""
             http_proxy: str = ""
             https_proxy: str = ""
@@ -230,6 +236,12 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         send_message(bot, message.chat.id, ip)
                 else:
                     send_message(bot, message.chat.id, "Не удалось получить локальные IP-адреса.")
+            if message.text == "/irc":
+                if is_irc_bot_running:
+                    for irc_msg in irc_bot.get_irc_log(MSG_NUMBER_LIMIT):
+                        send_message(bot, message.chat.id, irc_msg)
+                else:
+                    send_message(bot, message.chat.id, "IRC-бот не работает в данный момент.")
             if message.text == "/username":
                 send_message(bot, message.chat.id, Miscellaneous.get_username())
             if (
@@ -254,7 +266,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                 (message.text.lower() == "/help")
                 or (message.text == "/?")
             ):
-                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer, /calc, /cmd, /rss, /news")
+                send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer, /calc, /cmd, /rss, /news, /irc")
             if (
                 (message.text == "/ver")
                 or (message.text == "/sys")
@@ -401,7 +413,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
             ):
                 send_message(bot, message.chat.id, "Goodbye, cruel world! Никогда больше к вам не вернусь.")
                 bot.stop_poll
-                os._exit(0)
+                quit_app()
         """
         * *************************
         * ОБРАБОТКА ЗАПРОСОВ ОТ ПОЛЬЗОВАТЕЛЯ
@@ -424,7 +436,76 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
             print_error("Значение токена задано неверно.", f"{err_token}")
     return
 
+def run_irc_bot() -> IRCBot:
+    """
+    * Запуск бота IRC (в отдельном потоке)
+    *
+    * @return Список последних записей в виде массива строк
+    """
+    IRC_SECTION: str = "irc"
+    IRC_CHANNEL: str = "channel"
+    IRC_NICKNAME: str = "nickname"
+    IRC_SERVER: str = "server"
+    IRC_PORT: str = "port"
+    bot: IRCBot = None
+    config = configparser.ConfigParser()
+    try:
+        with open(Constant.SETTINGS_FILE.value, 'r', encoding=Constant.GLOBAL_CODEPAGE.value) as f:
+            config.read_file(f)
+            if IRC_SECTION in config:
+                if IRC_CHANNEL in config[IRC_SECTION]:
+                    l_channel: str = config[IRC_SECTION][IRC_CHANNEL].strip()
+                    if "".__eq__(l_channel):
+                        raise ValueError("Канал IRC не задан")
+                if IRC_NICKNAME in config[IRC_SECTION]:
+                    l_nickname: str = config[IRC_SECTION][IRC_NICKNAME].strip()
+                    if "".__eq__(l_nickname):
+                        raise ValueError("Имя пользователя в IRC не задано")
+                if IRC_SERVER in config[IRC_SECTION]:
+                    l_server: str = config[IRC_SECTION][IRC_SERVER].strip()
+                    if "".__eq__(l_server):
+                        raise ValueError("Не указан хост сервера IRC")
+                if IRC_PORT in config[IRC_SECTION]:
+                    l_port: int = config.getint(IRC_SECTION, IRC_PORT)
+                    if not (1 <= l_port <= 65534):
+                        raise ValueError("Значение порта вне допустимого диапазона (1 - 65534)")
+            bot = IRCBot(l_channel, l_nickname, l_server, l_port)
+            Miscellaneous.print_message("Запуск IRC-бота...")
+            thread: threading.Thread = threading.Thread(
+                target=lambda: (
+                    bot.start()
+                ),
+                daemon = True # если основной поток завершится, демон-поток будет автоматически остановлен
+            )
+            thread.start()
+            time.sleep(10)
+    except FileNotFoundError:
+        Miscellaneous.print_message(f"Ошибка: Файл настроек не найден: {Constant.SETTINGS_FILE.value}")
+    except ValueError:
+        Miscellaneous.print_message("Значение параметра не соответствует типу данных в конфигурационном файле.")
+    except Exception as e:
+        Miscellaneous.print_message(f"Ошибка при чтении файла настроек: {e}")
+    return bot
+
+def quit_app() -> None:
+    """
+    * Завершение работы программы
+    """
+    global is_irc_bot_running, irc_bot # глобальные переменные для IRC-бота
+    Miscellaneous.print_message("Выполняется завершение работы программы...")
+    if is_irc_bot_running: # корректное завершение работы IRC-бота
+        try:
+            irc_bot.connection.quit()
+        except ServerNotConnectedError:
+            pass
+        time.sleep(3)
+        is_irc_bot_running = False
+        Miscellaneous.print_message("IRC-бот остановлен.")
+    Miscellaneous.print_message("Завершение работы Telegram-бота.")
+    os._exit(0)
+
 def main() -> None:
+    global is_irc_bot_running, irc_bot # глобальные переменные для IRC-бота
     api_token: str = ""
     http_proxy: str = ""
     https_proxy: str = ""
@@ -437,8 +518,10 @@ def main() -> None:
     if "".__eq__(api_token):
         Miscellaneous.print_message("Токен для Telegram-бота не найден.")
     else:
+        irc_bot = run_irc_bot()
+        is_irc_bot_running = True if irc_bot is not None and irc_bot.is_connected else False
         run_bot(api_token, http_proxy, https_proxy)
-    Miscellaneous.print_message("Завершение работы Telegram-бота.")
+    quit_app()
     return
 
 # Точка запуска программы
