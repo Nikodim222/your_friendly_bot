@@ -35,6 +35,7 @@ from miscellaneous import Miscellaneous
 from models import Constant
 from ircbot import IRCBot
 from irc.client import ServerNotConnectedError
+from chatscript import ChatScript
 
 MSG_NUMBER_LIMIT: int = 15 # лимит на количество одновременных сообщений от бота к пользователю
 LOG_FILE: str = f"{__name__}.log" # имя файла для ведения лога
@@ -44,6 +45,9 @@ debugged: bool = False # режим отладки (по умолчанию от
 
 is_irc_bot_running = False # признак работы IRC-бота
 irc_bot: IRCBot = None
+
+is_chatscript_bot_running = False # признак работы ChatScript-бота
+oChatScript: ChatScript = None
 
 class LoggerWriter:
     """
@@ -187,6 +191,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
             global MSG_NUMBER_LIMIT
             global debugged
             global is_irc_bot_running, irc_bot # глобальные переменные для IRC-бота
+            global is_chatscript_bot_running, oChatScript # глобальные переменные для ChatScript-бота
             api_token: str = ""
             http_proxy: str = ""
             https_proxy: str = ""
@@ -228,7 +233,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         cur.close()
             if message.text == "hello":
                 send_message(bot, message.chat.id, "И тебе hello!")
-            if message.text == "/ip":
+            elif message.text == "/ip":
                 local_ips = Miscellaneous.get_local_ip_addresses()
                 if local_ips:
                     send_message(bot, message.chat.id, "Локальные IP-адреса:")
@@ -236,15 +241,15 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         send_message(bot, message.chat.id, ip)
                 else:
                     send_message(bot, message.chat.id, "Не удалось получить локальные IP-адреса.")
-            if message.text == "/irc":
+            elif message.text == "/irc":
                 if is_irc_bot_running:
                     for irc_msg in irc_bot.get_irc_log(MSG_NUMBER_LIMIT):
                         send_message(bot, message.chat.id, irc_msg)
                 else:
                     send_message(bot, message.chat.id, "IRC-бот не работает в данный момент.")
-            if message.text == "/username":
+            elif message.text == "/username":
                 send_message(bot, message.chat.id, Miscellaneous.get_username())
-            if (
+            elif (
                 (message.text == "/ps")
                 or (message.text == "/process")
                 or (message.text == "/processes")
@@ -257,23 +262,23 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                     send_message(bot, message.chat.id, process_name)
                     cnt += 1
                 send_message(bot, message.chat.id, f"Общее количество процессов: {len(processes)}.")
-            if (
+            elif (
                 (message.text == "/date")
                 or (message.text == "/time")
             ):
                 send_message(bot, message.chat.id, f"Текущая дата: {Miscellaneous.get_current_time()}.")
-            if (
+            elif (
                 (message.text.lower() == "/help")
                 or (message.text == "/?")
             ):
                 send_message(bot, message.chat.id, "Команды, допустимые для использования: /ip, /username, /ps, /process, /processes, /date, /time, /help, /?, /quit, /stop, /exit, /ver, /sys, /printenv, /phrase, /send, /weather, /outer_ip, /timer, /calc, /cmd, /rss, /news, /irc")
-            if (
+            elif (
                 (message.text == "/ver")
                 or (message.text == "/sys")
             ):
                 sys_prop = Miscellaneous.get_system_properties()
                 send_message(bot, message.chat.id, f"ОС: {sys_prop[0]}, версия {sys_prop[1]}, релиз {sys_prop[2]}. ОЗУ: всего: {sys_prop[3]}; используется: {sys_prop[4]}; свободно: {sys_prop[5]}; процент использования: {sys_prop[6]}.")
-            if (
+            elif (
                 (message.text == "/rss")
                 or (message.text == "/news")
             ):
@@ -290,7 +295,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                     rss_titles, rss_links = Miscellaneous.read_rss_feed(RSS_FEED_URL, MSG_NUMBER_LIMIT)
                 for rss_title, rss_link in zip(rss_titles, rss_links):
                     send_message(bot, message.chat.id, f"{rss_title}: {rss_link}")
-            if message.text == "/printenv":
+            elif message.text == "/printenv":
                 environment_variables = os.environ
                 cnt = 0
                 for key, value in environment_variables.items():
@@ -298,13 +303,13 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         break
                     send_message(bot, message.chat.id, f"{key}: {value}")
                     cnt += 1
-            if message.text == "/phrase":
+            elif message.text == "/phrase":
                 phrase: str = Miscellaneous.get_phrase_outta_file("phrase.txt", Constant.GLOBAL_CODEPAGE.value)
                 if not "".__eq__(phrase):
                     send_message(bot, message.chat.id, phrase)
                 else:
                     send_message(bot, message.chat.id, "Увы, фразы не заготовил.")
-            if (
+            elif (
                 (message.text == "/timer")
                 or (message.text.strip().startswith("/timer "))
             ):
@@ -329,7 +334,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                             send_message(bot, message.chat.id, f"Таймер установлен на {timer_seconds} секунд.")
                     except (IndexError, ValueError):
                         send_message(bot, message.chat.id, TIMER_ERR_MSG)
-            if (
+            elif (
                 (message.text == "/calc")
                 or (message.text.strip().startswith("/calc "))
             ):
@@ -344,7 +349,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         send_message(bot, message.chat.id, f"Для заданного количества секунд ({calc_seconds}) относительно текущего времени {Miscellaneous.get_current_time()} получается следующее время: {delta_time}.")
                     except (IndexError, ValueError):
                         send_message(bot, message.chat.id, CALC_ERR_MSG)
-            if (
+            elif (
                 (message.text == "/cmd")
                 or (message.text.strip().startswith("/cmd "))
             ):
@@ -366,7 +371,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                             send_message(bot, message.chat.id, f"Код возврата: {cmd_return_code}")
                     else:
                         send_message(bot, message.chat.id, "Эта команда недопустима, поскольку является опасной.")
-            if (
+            elif (
                 (message.text == "/send")
                 or (message.text.strip().startswith("/send "))
             ):
@@ -390,7 +395,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                     except SystemExit:
                         send_message(bot, message.chat.id, f"Ошибка в команде {chr(34)}send{chr(34)}.")
                         send_message(bot, message.chat.id, f"Введите {chr(34)}/send{chr(34)}, чтобы узнать, как правильно использовать команду.")
-            if message.text == "/weather":
+            elif message.text == "/weather":
                 weather_lines = Miscellaneous.get_url("https://wttr.in/?0T", http_proxy, https_proxy)
                 if weather_lines:
                     send_message(bot, message.chat.id, "Получен прогноз погоды. Данные представлены ниже.")
@@ -398,7 +403,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         send_message(bot, message.chat.id, weather_line)
                 else:
                     send_message(bot, message.chat.id, "Прогноз погоды недоступен в данный момент времени.")
-            if message.text == "/outer_ip":
+            elif message.text == "/outer_ip":
                 outer_ip_lines = Miscellaneous.get_url("https://icanhazip.com", http_proxy, https_proxy)
                 if outer_ip_lines:
                     send_message(bot, message.chat.id, "Получены данные по внешнему IP-адресу. Они представлены ниже.")
@@ -406,7 +411,7 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                         send_message(bot, message.chat.id, outer_ip_line)
                 else:
                     send_message(bot, message.chat.id, f"Невозможно определить {chr(34)}белый{chr(34)} IP-адрес.")
-            if ( # команда завершения работы бота
+            elif ( # команда завершения работы бота
                 (message.text.lower() == "/quit")
                 or (message.text.lower() == "/stop")
                 or (message.text.lower() == "/exit")
@@ -414,6 +419,11 @@ def run_bot(api_token: str, http_proxy: str, https_proxy: str) -> None:
                 send_message(bot, message.chat.id, "Goodbye, cruel world! Никогда больше к вам не вернусь.")
                 bot.stop_poll
                 quit_app()
+            else: # если ничего выше не совпало, то передаём управление серверу ChatScript
+                if is_chatscript_bot_running == True and oChatScript is not None:
+                    chatscript_bot_response: str = oChatScript.send_user_message(message.text)
+                    if not "".__eq__(chatscript_bot_response):
+                        send_message(bot, message.chat.id, chatscript_bot_response)
         """
         * *************************
         * ОБРАБОТКА ЗАПРОСОВ ОТ ПОЛЬЗОВАТЕЛЯ
@@ -487,6 +497,41 @@ def run_irc_bot() -> IRCBot:
         Miscellaneous.print_message(f"Ошибка при чтении файла настроек: {e}")
     return bot
 
+def get_chatscript_config():
+    """
+    * Получение конфигурации для работы клиента ChatScript
+    *
+    * @return Хост сервера, порт сервера
+    """
+    CHATSCRIPT_SECTION: str = "chatscript"
+    CHATSCRIPT_SERVER: str = "server"
+    CHATSCRIPT_PORT: str = "port"
+    config = configparser.ConfigParser()
+    try:
+        with open(Constant.SETTINGS_FILE.value, 'r', encoding=Constant.GLOBAL_CODEPAGE.value) as f:
+            config.read_file(f)
+            if CHATSCRIPT_SECTION in config:
+                l_server: str = ""
+                l_port: int = 0
+                if CHATSCRIPT_SERVER in config[CHATSCRIPT_SECTION]:
+                    l_server = config[CHATSCRIPT_SECTION][CHATSCRIPT_SERVER].strip()
+                    if "".__eq__(l_server):
+                        raise ValueError("Не указан хост сервера IRC")
+                if CHATSCRIPT_PORT in config[CHATSCRIPT_SECTION]:
+                    l_port = config.getint(CHATSCRIPT_SECTION, CHATSCRIPT_PORT)
+                    if not (1 <= l_port <= 65534):
+                        raise ValueError("Значение порта вне допустимого диапазона (1 - 65534)")
+                return l_server, l_port
+    except FileNotFoundError: # Ошибка: Файл настроек не найден
+        print(f"Ошибка: Файл настроек не найден: {Constant.SETTINGS_FILE.value}")
+        return None, None
+    except ValueError: # Значение параметра не соответствует типу данных в конфигурационном файле
+        print("Значение параметра не соответствует типу данных в конфигурационном файле.")
+        return None, None
+    except Exception as e: # Ошибка при чтении файла настроек
+        print(f"Ошибка при чтении файла настроек: {e}")
+        return None, None
+
 def quit_app() -> None:
     """
     * Завершение работы программы
@@ -506,6 +551,9 @@ def quit_app() -> None:
 
 def main() -> None:
     global is_irc_bot_running, irc_bot # глобальные переменные для IRC-бота
+    global is_chatscript_bot_running, oChatScript # глобальные переменные для ChatScript-бота
+    chatscript_host: str = None
+    chatscript_port: int = None
     api_token: str = ""
     http_proxy: str = ""
     https_proxy: str = ""
@@ -518,6 +566,14 @@ def main() -> None:
     if "".__eq__(api_token):
         Miscellaneous.print_message("Токен для Telegram-бота не найден.")
     else:
+        chatscript_host, chatscript_port = get_chatscript_config()
+        if chatscript_host is not None and chatscript_port is not None:
+            oChatScript = ChatScript(chatscript_host, chatscript_port)
+            if oChatScript.is_server_running():
+                chatscript_init: str = oChatScript.server_reset() # инициализация бота ChatScript
+                if not "".__eq__(chatscript_init):
+                    is_chatscript_bot_running = True
+                    Miscellaneous.print_message(f"Проинициализирован бот ChatScript. Получен ответ от сервера: {chr(34)}{chatscript_init}{chr(34)}.")
         irc_bot = run_irc_bot()
         is_irc_bot_running = True if irc_bot is not None and irc_bot.is_connected else False
         run_bot(api_token, http_proxy, https_proxy)
